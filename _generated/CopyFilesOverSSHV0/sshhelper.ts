@@ -145,11 +145,11 @@ export class SshHelper {
             }
 
             if (await this.sftpClient.exists(path)) {
-                //path exists
+                // path exists
                 tl.debug(tl.loc('PathExists', path));
                 resolve(true);
             } else {
-                //path does not exist
+                // path does not exist
                 tl.debug(tl.loc('PathNotExists', path));
                 resolve(false);
             }
@@ -186,7 +186,7 @@ export class SshHelper {
             let cmdToRun = command;
 
             if (cmdToRun.indexOf(';') > 0) {
-                //multiple commands were passed separated by ;
+                // multiple commands were passed separated by ;
                 cmdToRun = cmdToRun.replace(/;/g, '\n');
             }
 
@@ -202,17 +202,17 @@ export class SshHelper {
                     tl.debug('code = ' + code + ', signal = ' + signal);
 
                     if (code && code != 0) {
-                        //non zero exit code - fail
+                        // non zero exit code - fail
                         reject(tl.loc('RemoteCmdNonZeroExitCode', cmdToRun, code));
                     } else {
-                        //no exit code or exit code of 0
+                        // no exit code or exit code of 0
 
-                        //based on the options decide whether to fail the build or not if data was written to STDERR
+                        // based on the options decide whether to fail the build or not if data was written to STDERR
                         if (stdErrWritten === true && options.failOnStdErr === true) {
-                            //stderr written - fail the build
+                            // stderr written - fail the build
                             reject(tl.loc('RemoteCmdExecutionErr', cmdToRun, tl.loc('CheckLogForStdErr')));
                         } else {
-                            //success
+                            // success
                             resolve('0');
                         }
                     }

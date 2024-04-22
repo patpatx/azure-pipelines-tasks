@@ -99,7 +99,7 @@ function getFilesToCopy(sourceFolder: string, contents: string[]): string[] {
     return files;
 }
 
-function prepareFiles(filesToCopy: string[], sourceFolder: string, targetFolder: string, flattenFolders: boolean): string[] {
+function prepareFiles(filesToCopy: string[], sourceFolder: string, targetFolder: string, flattenFolders: boolean) {
     return filesToCopy.map(x => {
         let targetPath = path.posix.join(
             targetFolder,
@@ -112,19 +112,21 @@ function prepareFiles(filesToCopy: string[], sourceFolder: string, targetFolder:
             targetPath = `./${targetPath}`;
         }
 
-        return path.dirname(utils.unixyPath(targetPath));
-    }).sort();
+        return [ x, utils.unixyPath(targetPath) ];
+    });
 }
 
 function getUniqueFolders(filesToCopy: string[]) {
     const foldersSet = new Set<string>();
 
-    for (const foldersPath of filesToCopy) {
-        if (foldersSet.has(foldersPath)) {
+    for (const filePath of filesToCopy) {
+        const folderPath = path.dirname(filePath);
+
+        if (foldersSet.has(folderPath)) {
             continue;
         }
 
-        foldersSet.add(foldersPath);
+        foldersSet.add(folderPath);
     }
 
     return Array.from(foldersSet.values());
@@ -238,7 +240,7 @@ async function run() {
                 console.log(tl.loc('CopyingFiles', preparedFiles.length));
 
                 // Create remote folders structure
-                const folderStructure = getUniqueFolders(preparedFiles);
+                const folderStructure = getUniqueFolders(preparedFiles.map(x => x[1]).sort());
 
                 for (const foldersPath of folderStructure) {
                     try {
@@ -260,25 +262,10 @@ async function run() {
                     // Splice files to copy into chunks
                     const chunk = preparedFiles.slice(i * chunkSize, i * chunkSize + chunkSize);
 
-                    const results = await Promise.allSettled(chunk.map(async (fileToCopy) => {
+                    const results = await Promise.allSettled(chunk.map(async (pathTuple) => {
+                        const [ fileToCopy, targetPath ] = pathTuple;
+
                         tl.debug('fileToCopy = ' + fileToCopy);
-
-                        let relativePath: string;
-
-                        if (flattenFolders) {
-                            relativePath = path.basename(fileToCopy);
-                        } else {
-                            relativePath = fileToCopy.substring(sourceFolder.length)
-                                .replace(/^\\/g, "")
-                                .replace(/^\//g, "");
-                        }
-
-                        tl.debug('relativePath = ' + relativePath);
-                        let targetPath = path.posix.join(targetFolder, relativePath);
-
-                        if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
-                            targetPath = `./${targetPath}`;
-                        }
 
                         console.log(tl.loc('StartedFileCopy', fileToCopy, targetPath));
 
@@ -290,7 +277,6 @@ async function run() {
                             }
                         }
 
-                        targetPath = utils.unixyPath(targetPath);
                         return sshHelper.uploadFile(fileToCopy, targetPath);
                     }));
 
