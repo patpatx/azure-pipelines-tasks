@@ -32,6 +32,8 @@
   "loc.messages.ConnectionFailed": "Failed to connect to remote machine. Verify the SSH service connection details. %s.",
   "loc.messages.ConnectionNotSetup": "SSH service connection is not set up.",
   "loc.messages.CopyCompleted": "Completed copying %s files to the remote machine.",
+  "loc.messages.CopyDirectoryCompleted": "Completed copying %s directory to the remote machine.",
+  "loc.messages.CopyDirectoryFailed": "Failed to copy %s directory to the remote machine. %s",
   "loc.messages.CopyingFiles": "Found %s files to copy to the remote machine.",
   "loc.messages.FailedOnFile": "Failed to copy %s. %s",
   "loc.messages.FileExists": "File %s cannot be copied to the remote machine because it already exists and the 'Overwrite' option is disabled.",
@@ -47,5 +49,6 @@
   "loc.messages.TargetNotCreated": "Unable to create target folder %s.",
   "loc.messages.CheckingPathExistance": "Checking if %s on the remote machine exists.",
   "loc.messages.PathExists": "%s exists on the remote machine",
-  "loc.messages.PathNotExists": "%s doesn't exist on the remote machine"
+  "loc.messages.PathNotExists": "%s doesn't exist on the remote machine",
+  "loc.messages.UploadFolderFailed": "Failed to upload folder %s to %s on remote machine. %s."
 }

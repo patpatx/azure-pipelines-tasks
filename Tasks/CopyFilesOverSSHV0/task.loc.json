@@ -153,6 +153,8 @@
     "ConnectionFailed": "ms-resource:loc.messages.ConnectionFailed",
     "ConnectionNotSetup": "ms-resource:loc.messages.ConnectionNotSetup",
     "CopyCompleted": "ms-resource:loc.messages.CopyCompleted",
+    "CopyDirectoryCompleted": "ms-resource:loc.messages.CopyDirectoryCompleted",
+    "CopyDirectoryFailed": "ms-resource:loc.messages.CopyDirectoryFailed",
     "CopyingFiles": "ms-resource:loc.messages.CopyingFiles",
     "FailedOnFile": "ms-resource:loc.messages.FailedOnFile",
     "FileExists": "ms-resource:loc.messages.FileExists",
@@ -168,6 +170,7 @@
     "TargetNotCreated": "ms-resource:loc.messages.TargetNotCreated",
     "CheckingPathExistance": "ms-resource:loc.messages.CheckingPathExistance",
     "PathExists": "ms-resource:loc.messages.PathExists",
-    "PathNotExists": "ms-resource:loc.messages.PathNotExists"
+    "PathNotExists": "ms-resource:loc.messages.PathNotExists",
+    "UploadFolderFailed": "ms-resource:loc.messages.UploadFolderFailed"
   }
 }
