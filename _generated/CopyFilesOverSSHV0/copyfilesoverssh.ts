@@ -99,6 +99,48 @@ function getFilesToCopy(sourceFolder: string, contents: string[]): string[] {
     return files;
 }
 
+async function createRemoteFolders(
+    filesToCopy: string[],
+    targetFolder: string,
+    sourceFolder: string,
+    flattenFolders: boolean = false,
+) {
+    var paths = filesToCopy.map(fileToCopy => {
+        let targetPath = path.posix.join(
+            targetFolder,
+            flattenFolders
+                ? path.basename(fileToCopy)
+                : fileToCopy.substring(sourceFolder.length).replace(/^\\/g, "").replace(/^\//g, "")
+        );
+
+        if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
+            targetPath = `./${targetPath}`;
+        }
+
+        targetPath = utils.unixyPath(targetPath);
+        return [fileToCopy, targetPath];
+    });
+
+    var uniqueRemotePaths = paths.reduce((acc, cur) => {
+        const directoryPath = path.posix.dirname(cur[1]);
+        if (acc.filter(x => x.startsWith(directoryPath)).length === 0) {
+            acc.push(directoryPath);
+        }
+
+        return acc;
+    }, []);
+
+    uniqueRemotePaths.forEach(async (x) => {
+        try {
+            if (!await this.sftpClient.exists(x)) {
+                await this.sftpClient.mkdir(x, true);
+            }
+        } catch (error) {
+            return tl.loc('TargetNotCreated', x);
+        }
+    });
+}
+
 async function run() {
     let sshHelper: SshHelper;
     try {
@@ -191,47 +233,54 @@ async function run() {
             tl.debug('Number of files to copy = ' + filesToCopy.length);
             tl.debug('filesToCopy = ' + filesToCopy);
 
-            let failureCount = 0;
             console.log(tl.loc('CopyingFiles', filesToCopy.length));
-            for (const fileToCopy of filesToCopy) {
-                try {
-                    tl.debug('fileToCopy = ' + fileToCopy);
+            createRemoteFolders(filesToCopy, targetFolder, sourceFolder, flattenFolders);
+            
+            const results = await Promise.allSettled(filesToCopy.map(async (fileToCopy) => {
+                tl.debug('fileToCopy = ' + fileToCopy);
 
-                    let relativePath;
-                    if (flattenFolders) {
-                        relativePath = path.basename(fileToCopy);
-                    } else {
-                        relativePath = fileToCopy.substring(sourceFolder.length)
-                            .replace(/^\\/g, "")
-                            .replace(/^\//g, "");
-                    }
-                    tl.debug('relativePath = ' + relativePath);
-                    let targetPath = path.posix.join(targetFolder, relativePath);
+                let relativePath;
 
-                    if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
-                        targetPath = `./${targetPath}`;
-                    }
-
-                    console.log(tl.loc('StartedFileCopy', fileToCopy, targetPath));
-                    if (!overwrite) {
-                        const fileExists: boolean = await sshHelper.checkRemotePathExists(targetPath);
-                        if (fileExists) {
-                            throw tl.loc('FileExists', targetPath);
-                        }
-                    }
-
-                    targetPath = utils.unixyPath(targetPath);
-                    // looks like scp can only handle one file at a time reliably
-                    await sshHelper.uploadFile(fileToCopy, targetPath);
-                } catch (err) {
-                    tl.error(tl.loc('FailedOnFile', fileToCopy, err));
-                    failureCount++;
+                if (flattenFolders) {
+                    relativePath = path.basename(fileToCopy);
+                } else {
+                    relativePath = fileToCopy.substring(sourceFolder.length)
+                        .replace(/^\\/g, "")
+                        .replace(/^\//g, "");
                 }
+
+                tl.debug('relativePath = ' + relativePath);
+                let targetPath = path.posix.join(targetFolder, relativePath);
+
+                if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
+                    targetPath = `./${targetPath}`;
+                }
+
+                console.log(tl.loc('StartedFileCopy', fileToCopy, targetPath));
+
+                if (!overwrite) {
+                    const fileExists: boolean = await sshHelper.checkRemotePathExists(targetPath);
+
+                    if (fileExists) {
+                        throw tl.loc('FileExists', targetPath);
+                    }
+                }
+
+                targetPath = utils.unixyPath(targetPath);
+                // looks like scp can only handle one file at a time reliably
+                const uploadResult = await sshHelper.uploadFile(fileToCopy, targetPath);
+                return uploadResult;
+            }));
+
+            var errors = results.filter(p => p.status === 'rejected') as PromiseRejectedResult[];
+
+            if (errors.length > 0) {
+                errors.forEach(x => tl.error(x.reason));
+                tl.setResult(tl.TaskResult.Failed, tl.loc('NumberFailed', errors.length));
             }
-            console.log(tl.loc('CopyCompleted', filesToCopy.length));
-            if (failureCount) {
-                tl.setResult(tl.TaskResult.Failed, tl.loc('NumberFailed', failureCount));
-            }
+
+            var successedFiles = results.filter(p => p.status === 'fulfilled');
+            console.log(tl.loc('CopyCompleted', successedFiles.length));
         } else if (failOnEmptySource) {
             throw tl.loc('NothingToCopy');
         } else {

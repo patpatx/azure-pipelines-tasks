@@ -103,31 +103,32 @@ export class SshHelper {
     async uploadFile(sourceFile: string, dest: string) : Promise<string> {
         tl.debug('Upload ' + sourceFile + ' to ' + dest + ' on remote machine.');
 
-        var defer = Q.defer<string>();
-        if(!this.sftpClient) {
-            defer.reject(tl.loc('ConnectionNotSetup'));
-        }
-
-        const remotePath = path.dirname(dest);
-        try {
-            if (!await this.sftpClient.exists(remotePath)) {
-                await this.sftpClient.mkdir(remotePath, true);
+        return new Promise(async (resolve, reject) => {
+            if (!this.sftpClient) {
+                reject(tl.loc('ConnectionNotSetup'));
             }
-        } catch (error) {
-            defer.reject(tl.loc('TargetNotCreated', remotePath));
-        }
 
-        try {
-            if (this.sshConfig.useFastPut) {
-                await this.sftpClient.fastPut(sourceFile, dest);
-            } else {
-                await this.sftpClient.put(sourceFile, dest);
+            const remotePath = path.dirname(dest);
+            
+            try {
+                if (!await this.sftpClient.exists(remotePath)) {
+                    await this.sftpClient.mkdir(remotePath, true);
+                }
+            } catch (error) {
+                reject(tl.loc('TargetNotCreated', remotePath));
             }
-            defer.resolve(dest);
-        } catch (err) {
-            defer.reject(tl.loc('UploadFileFailed', sourceFile, dest, err));
-        }
-        return defer.promise;
+
+            try {
+                if (this.sshConfig.useFastPut) {
+                    await this.sftpClient.fastPut(sourceFile, dest);
+                } else {
+                    await this.sftpClient.put(sourceFile, dest);
+                }
+                resolve(dest);
+            } catch (err) {
+                reject(tl.loc('UploadFileFailed', sourceFile, dest, err));
+            }
+        });
     }
 
     /**
