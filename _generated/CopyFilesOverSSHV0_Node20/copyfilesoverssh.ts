@@ -106,41 +106,38 @@ async function createRemoteFolders(
     targetFolder: string,
     sourceFolder: string,
     flattenFolders: boolean = false,
+    sshHelper: SshHelper
 ) {
-    var paths = filesToCopy.map(fileToCopy => {
+    const foldersSet = new Set();
+
+    const foldersPaths = filesToCopy.map(x => {
         let targetPath = path.posix.join(
             targetFolder,
             flattenFolders
-                ? path.basename(fileToCopy)
-                : fileToCopy.substring(sourceFolder.length).replace(/^\\/g, "").replace(/^\//g, "")
+                ? path.basename(x)
+                : x.substring(sourceFolder.length).replace(/^\\/g, "").replace(/^\//g, "")
         );
 
         if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
             targetPath = `./${targetPath}`;
         }
 
-        targetPath = utils.unixyPath(targetPath);
-        return [fileToCopy, targetPath];
-    });
+        return path.dirname(utils.unixyPath(targetPath));
+    }).sort();
 
-    var uniqueRemotePaths = paths.reduce((acc, cur) => {
-        const directoryPath = path.posix.dirname(cur[1]);
-        if (acc.filter(x => x.startsWith(directoryPath)).length === 0) {
-            acc.push(directoryPath);
-        }
-
-        return acc;
-    }, []);
-
-    uniqueRemotePaths.forEach(async (x) => {
-        try {
-            if (!await this.sftpClient.exists(x)) {
-                await this.sftpClient.mkdir(x, true);
+    return Promise.all(foldersPaths.map(foldersPath => {
+        return new Promise(async (resolve, reject) => {
+            if (foldersSet.has(foldersPath)) {
+                return resolve("Folder " + foldersPath + " already created");
             }
-        } catch (error) {
-            return tl.loc('TargetNotCreated', x);
-        }
-    });
+
+            try {
+                resolve(await sshHelper.createRemoteDirectory(foldersPath));
+            } catch (error) {
+                reject(tl.loc('TargetNotCreated', foldersPath, error));
+            }
+        });
+    }));
 }
 
 async function run() {
@@ -228,7 +225,7 @@ async function run() {
         }
 
         if (contents.length === 1 && contents[0] === "**") {
-            tl.debug("Upload all files to a remote machine");
+            tl.debug("Upload a directory to a remote machine");
 
             try {
                 const completedDirectory = await sshHelper.uploadFolder(sourceFolder, targetFolder);
@@ -246,7 +243,8 @@ async function run() {
                 tl.debug('filesToCopy = ' + filesToCopy);
 
                 console.log(tl.loc('CopyingFiles', filesToCopy.length));
-                createRemoteFolders(filesToCopy, targetFolder, sourceFolder, flattenFolders);
+                const f = await createRemoteFolders(filesToCopy, targetFolder, sourceFolder, flattenFolders, sshHelper);
+                console.log(f);
 
                 const results = await Promise.allSettled(filesToCopy.map(async (fileToCopy) => {
                     tl.debug('fileToCopy = ' + fileToCopy);
@@ -279,7 +277,7 @@ async function run() {
                     }
 
                     targetPath = utils.unixyPath(targetPath);
-                    return await sshHelper.uploadFile(fileToCopy, targetPath);
+                    return sshHelper.uploadFile(fileToCopy, targetPath);
                 }));
 
                 var errors = results.filter(p => p.status === 'rejected') as PromiseRejectedResult[];

@@ -106,9 +106,9 @@ export class SshHelper {
         }
 
         if (this.sshConfig.useFastPut) {
-            return await this.sftpClient.fastPut(sourceFile, dest);
+            return this.sftpClient.fastPut(sourceFile, dest);
         } else {
-            return await this.sftpClient.put(sourceFile, dest);
+            return this.sftpClient.put(sourceFile, dest);
         }
     }
 
@@ -154,6 +154,12 @@ export class SshHelper {
                 resolve(false);
             }
         });
+    }
+
+    async createRemoteDirectory(path: string) {
+        if (!await this.sftpClient.exists(path)) {
+            return await this.sftpClient.mkdir(path, true);
+        }
     }
 
     /**
