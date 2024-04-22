@@ -5,8 +5,6 @@ import * as minimatch from 'minimatch';
 import * as utils from './utils';
 import { SshHelper } from './sshhelper';
 
-import { existsSync } from "fs";
-
 // This method will find the list of matching files for the specified contents
 // This logic is the same as the one used by CopyFiles task except for allowing dot folders to be copied
 // This will be useful to put in the task-lib
@@ -101,16 +99,8 @@ function getFilesToCopy(sourceFolder: string, contents: string[]): string[] {
     return files;
 }
 
-async function createRemoteFolders(
-    filesToCopy: string[],
-    targetFolder: string,
-    sourceFolder: string,
-    flattenFolders: boolean = false,
-    sshHelper: SshHelper
-) {
-    const foldersSet = new Set();
-
-    const foldersPaths = filesToCopy.map(x => {
+function prepareFiles(filesToCopy: string[], sourceFolder: string, targetFolder: string, flattenFolders: boolean): string[] {
+    return filesToCopy.map(x => {
         let targetPath = path.posix.join(
             targetFolder,
             flattenFolders
@@ -124,24 +114,25 @@ async function createRemoteFolders(
 
         return path.dirname(utils.unixyPath(targetPath));
     }).sort();
+}
 
-    return Promise.all(foldersPaths.map(foldersPath => {
-        return new Promise(async (resolve, reject) => {
-            if (foldersSet.has(foldersPath)) {
-                return resolve("Folder " + foldersPath + " already created");
-            }
+function getUniqueFolders(filesToCopy: string[]) {
+    const foldersSet = new Set<string>();
 
-            try {
-                resolve(await sshHelper.createRemoteDirectory(foldersPath));
-            } catch (error) {
-                reject(tl.loc('TargetNotCreated', foldersPath, error));
-            }
-        });
-    }));
+    for (const foldersPath of filesToCopy) {
+        if (foldersSet.has(foldersPath)) {
+            continue;
+        }
+
+        foldersSet.add(foldersPath);
+    }
+
+    return Array.from(foldersSet.values());
 }
 
 async function run() {
     let sshHelper: SshHelper;
+
     try {
         tl.setResourcePath(path.join(__dirname, 'task.json'));
 
@@ -235,60 +226,85 @@ async function run() {
             }
         } else {
             // identify the files to copy
-            const filesToCopy: string[] = getFilesToCopy(sourceFolder, contents);
+            const filesToCopy = getFilesToCopy(sourceFolder, contents);
 
             // copy files to remote machine
             if (filesToCopy) {
-                tl.debug('Number of files to copy = ' + filesToCopy.length);
-                tl.debug('filesToCopy = ' + filesToCopy);
+                const preparedFiles = prepareFiles(filesToCopy, sourceFolder, targetFolder, flattenFolders);
 
-                console.log(tl.loc('CopyingFiles', filesToCopy.length));
-                const f = await createRemoteFolders(filesToCopy, targetFolder, sourceFolder, flattenFolders, sshHelper);
-                console.log(f);
+                tl.debug('Number of files to copy = ' + preparedFiles.length);
+                tl.debug('filesToCopy = ' + preparedFiles);
 
-                const results = await Promise.allSettled(filesToCopy.map(async (fileToCopy) => {
-                    tl.debug('fileToCopy = ' + fileToCopy);
+                console.log(tl.loc('CopyingFiles', preparedFiles.length));
 
-                    let relativePath: string;
+                // Create remote folders structure
+                const folderStructure = getUniqueFolders(preparedFiles);
 
-                    if (flattenFolders) {
-                        relativePath = path.basename(fileToCopy);
-                    } else {
-                        relativePath = fileToCopy.substring(sourceFolder.length)
-                            .replace(/^\\/g, "")
-                            .replace(/^\//g, "");
+                for (const foldersPath of folderStructure) {
+                    try {
+                        await sshHelper.createRemoteDirectory(foldersPath);
+                        console.log(tl.loc("FolderCreated", foldersPath));
+                    } catch (error) {
+                        throw tl.loc('TargetNotCreated', foldersPath, error);
                     }
-
-                    tl.debug('relativePath = ' + relativePath);
-                    let targetPath = path.posix.join(targetFolder, relativePath);
-
-                    if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
-                        targetPath = `./${targetPath}`;
-                    }
-
-                    console.log(tl.loc('StartedFileCopy', fileToCopy, targetPath));
-
-                    if (!overwrite) {
-                        const fileExists: boolean = await sshHelper.checkRemotePathExists(targetPath);
-
-                        if (fileExists) {
-                            throw tl.loc('FileExists', targetPath);
-                        }
-                    }
-
-                    targetPath = utils.unixyPath(targetPath);
-                    return sshHelper.uploadFile(fileToCopy, targetPath);
-                }));
-
-                var errors = results.filter(p => p.status === 'rejected') as PromiseRejectedResult[];
-
-                if (errors.length > 0) {
-                    errors.forEach(x => tl.error(x.reason));
-                    tl.setResult(tl.TaskResult.Failed, tl.loc('NumberFailed', errors.length));
                 }
 
-                var successedFiles = results.filter(p => p.status === 'fulfilled');
-                console.log(tl.loc('CopyCompleted', successedFiles.length));
+                tl.loc("FoldersCreated", folderStructure.length);
+
+                // Upload files to remote machine
+                const chunkSize = 10;
+                const chunks = Math.ceil(preparedFiles.length / chunkSize);
+                let successedFiles = 0;
+
+                for (let i = 0; i < chunks; i++) {
+                    // Splice files to copy into chunks
+                    const chunk = preparedFiles.slice(i * chunkSize, i * chunkSize + chunkSize);
+
+                    const results = await Promise.allSettled(chunk.map(async (fileToCopy) => {
+                        tl.debug('fileToCopy = ' + fileToCopy);
+
+                        let relativePath: string;
+
+                        if (flattenFolders) {
+                            relativePath = path.basename(fileToCopy);
+                        } else {
+                            relativePath = fileToCopy.substring(sourceFolder.length)
+                                .replace(/^\\/g, "")
+                                .replace(/^\//g, "");
+                        }
+
+                        tl.debug('relativePath = ' + relativePath);
+                        let targetPath = path.posix.join(targetFolder, relativePath);
+
+                        if (!path.isAbsolute(targetPath) && !utils.pathIsUNC(targetPath)) {
+                            targetPath = `./${targetPath}`;
+                        }
+
+                        console.log(tl.loc('StartedFileCopy', fileToCopy, targetPath));
+
+                        if (!overwrite) {
+                            const fileExists: boolean = await sshHelper.checkRemotePathExists(targetPath);
+
+                            if (fileExists) {
+                                throw tl.loc('FileExists', targetPath);
+                            }
+                        }
+
+                        targetPath = utils.unixyPath(targetPath);
+                        return sshHelper.uploadFile(fileToCopy, targetPath);
+                    }));
+
+                    var errors = results.filter(p => p.status === 'rejected') as PromiseRejectedResult[];
+
+                    if (errors.length > 0) {
+                        errors.forEach(x => tl.error(x.reason));
+                        tl.setResult(tl.TaskResult.Failed, tl.loc('NumberFailed', errors.length));
+                    }
+
+                    successedFiles += results.filter(p => p.status === 'fulfilled').length;
+                }
+
+                console.log(tl.loc('CopyCompleted', successedFiles));
             } else if (failOnEmptySource) {
                 throw tl.loc('NothingToCopy');
             } else {

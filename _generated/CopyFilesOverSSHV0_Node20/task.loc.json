@@ -162,6 +162,8 @@
     "CopyingFiles": "ms-resource:loc.messages.CopyingFiles",
     "FailedOnFile": "ms-resource:loc.messages.FailedOnFile",
     "FileExists": "ms-resource:loc.messages.FileExists",
+    "FolderCreated": "ms-resource:loc.messages.FolderCreated",
+    "FoldersCreated": "ms-resource:loc.messages.FoldersCreated",
     "NothingToCopy": "ms-resource:loc.messages.NothingToCopy",
     "NumberFailed": "ms-resource:loc.messages.NumberFailed",
     "RemoteCmdExecutionErr": "ms-resource:loc.messages.RemoteCmdExecutionErr",
