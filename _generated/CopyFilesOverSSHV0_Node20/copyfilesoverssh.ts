@@ -5,6 +5,8 @@ import * as minimatch from 'minimatch';
 import * as utils from './utils';
 import { SshHelper } from './sshhelper';
 
+import { existsSync } from "fs";
+
 // This method will find the list of matching files for the specified contents
 // This logic is the same as the one used by CopyFiles task except for allowing dot folders to be copied
 // This will be useful to put in the task-lib
@@ -249,7 +251,7 @@ async function run() {
                 const results = await Promise.allSettled(filesToCopy.map(async (fileToCopy) => {
                     tl.debug('fileToCopy = ' + fileToCopy);
 
-                    let relativePath;
+                    let relativePath: string;
 
                     if (flattenFolders) {
                         relativePath = path.basename(fileToCopy);
@@ -277,8 +279,7 @@ async function run() {
                     }
 
                     targetPath = utils.unixyPath(targetPath);
-                    // looks like scp can only handle one file at a time reliably
-                    return sshHelper.uploadFile(fileToCopy, targetPath);
+                    return await sshHelper.uploadFile(fileToCopy, targetPath);
                 }));
 
                 var errors = results.filter(p => p.status === 'rejected') as PromiseRejectedResult[];

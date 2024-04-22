@@ -101,24 +101,15 @@ export class SshHelper {
     async uploadFile(sourceFile: string, dest: string) : Promise<string> {
         tl.debug('Upload ' + sourceFile + ' to ' + dest + ' on remote machine.');
 
-        return new Promise(async (resolve, reject) => {
-            if (!this.sftpClient) {
-                reject(tl.loc('ConnectionNotSetup'));
-                return;
-            }
+        if (!this.sftpClient) {
+            return Promise.reject(tl.loc('ConnectionNotSetup'));
+        }
 
-            try {
-                if (this.sshConfig.useFastPut) {
-                    await this.sftpClient.fastPut(sourceFile, dest);
-                } else {
-                    await this.sftpClient.put(sourceFile, dest);
-                }
-
-                resolve(dest);
-            } catch (err) {
-                reject(tl.loc('UploadFileFailed', sourceFile, dest, err));
-            }
-        });
+        if (this.sshConfig.useFastPut) {
+            return await this.sftpClient.fastPut(sourceFile, dest);
+        } else {
+            return await this.sftpClient.put(sourceFile, dest);
+        }
     }
 
     async uploadFolder(sourceFolder: string, destFolder: string) : Promise<string> {
@@ -132,6 +123,7 @@ export class SshHelper {
 
             try {
                 await this.sftpClient.uploadDir(sourceFolder, destFolder);
+                return resolve(destFolder);
             } catch (err) {
                 reject(tl.loc('UploadFolderFailed', sourceFolder, destFolder, err));
             }
@@ -219,7 +211,7 @@ export class SshHelper {
                         }
                     }
                 }).on('data', (data) => {
-                    console.log(data);
+                    console.log(data.toString());
                 }).stderr.on('data', (data) => {
                     stdErrWritten = true;
                     tl.debug('stderr = ' + data);
