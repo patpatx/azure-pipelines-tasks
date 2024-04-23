@@ -251,7 +251,7 @@ async function run() {
                     }
                 }
 
-                tl.loc("FoldersCreated", folderStructure.length);
+                console.log(tl.loc("FoldersCreated", folderStructure.length));
 
                 // Upload files to remote machine
                 const chunkSize = 10;
@@ -285,6 +285,7 @@ async function run() {
                     if (errors.length > 0) {
                         errors.forEach(x => tl.error(x.reason));
                         tl.setResult(tl.TaskResult.Failed, tl.loc('NumberFailed', errors.length));
+                        return;
                     }
 
                     successedFiles += results.filter(p => p.status === 'fulfilled').length;
